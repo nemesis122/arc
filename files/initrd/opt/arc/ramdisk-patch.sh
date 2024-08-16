@@ -38,6 +38,7 @@ CPUGOVERNOR="$(readConfigKey "governor" "${USER_CONFIG_FILE}")"
 KERNEL="$(readConfigKey "kernel" "${USER_CONFIG_FILE}")"
 RD_COMPRESSED="$(readConfigKey "rd-compressed" "${USER_CONFIG_FILE}")"
 PRODUCTVER="$(readConfigKey "productver" "${USER_CONFIG_FILE}")"
+ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
 # Read new PAT Info from Config
 PAT_URL="$(readConfigKey "paturl" "${USER_CONFIG_FILE}")"
 PAT_HASH="$(readConfigKey "pathash" "${USER_CONFIG_FILE}")"
@@ -141,7 +142,7 @@ rm -f "${TMP_PATH}/rp.txt"
 installModules "${PLATFORM}" "${KVERP}" "${!MODULES[@]}" || exit 1
 
 # Copying fake modprobe
-cp -f "${PATCH_PATH}/iosched-trampoline.sh" "${RAMDISK_PATH}/usr/sbin/modprobe"
+[ $(echo "${KVER:-4}" | cut -d'.' -f1) -lt 5 ] && cp -f "${PATCH_PATH}/iosched-trampoline.sh" "${RAMDISK_PATH}/usr/sbin/modprobe"
 # Copying LKM to /usr/lib/modules
 gzip -dc "${LKMS_PATH}/rp-${PLATFORM}-${KVERP}-${LKM}.ko.gz" >"${RAMDISK_PATH}/usr/lib/modules/rp.ko" 2>"${LOG_FILE}" || exit 1
 
@@ -152,6 +153,7 @@ echo "#!/bin/sh" >"${RAMDISK_PATH}/addons/addons.sh"
 echo 'echo "addons.sh called with params ${@}"' >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export LOADERLABEL=\"ARC\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export LOADERVERSION=\"${ARC_VERSION}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
+echo "export LOADERBRANCH=\"${ARCBRANCH}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export PLATFORM=\"${PLATFORM}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export PRODUCTVER=\"${PRODUCTVER}\"" >>"${RAMDISK_PATH}/addons/addons.sh"
 echo "export MODEL=\"${MODEL}\"" >>"${RAMDISK_PATH}/addons/addons.sh"

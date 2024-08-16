@@ -1,13 +1,11 @@
-[[ -z "${ARC_PATH}" || ! -d "${ARC_PATH}/include" ]] && ARC_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../" 2>/dev/null && pwd)"
-
-. ${ARC_PATH}/include/functions.sh
-
 ###############################################################################
 # Upgrade Loader
 function upgradeLoader () {
   local ARCNIC="$(readConfigKey "arc.nic" "${USER_CONFIG_FILE}")"
   local AUTOMATED="$(readConfigKey "automated" "${USER_CONFIG_FILE}")"
   local ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
+  rm -f "${TMP_PATH}/check.update"
+  rm -f "${TMP_PATH}/arc.img.zip"
   if [ -z "${1}" ]; then
     # Check for new Version
     idx=0
@@ -40,6 +38,8 @@ function upgradeLoader () {
           return 1
         fi
       fi
+    else
+      updateFaileddialog
     fi
     (
       # Download update file
@@ -95,6 +95,9 @@ function updateLoader() {
   local ARCNIC="$(readConfigKey "arc.nic" "${USER_CONFIG_FILE}")"
   local AUTOMATED="$(readConfigKey "automated" "${USER_CONFIG_FILE}")"
   local ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
+  rm -f "${TMP_PATH}/check.update"
+  rm -f "${TMP_PATH}/checksum.sha256"
+  rm -f "${TMP_PATH}/update.zip"
   if [ -z "${1}" ]; then
     # Check for new Version
     idx=0
@@ -130,8 +133,10 @@ function updateLoader() {
         dialog --backtitle "$(backtitle)" --title "Update Loader" \
           --infobox "Config is not compatible to new Version!\nUpdate not possible!\nPlease reflash Loader." 0 0
         sleep 5
-        updateFailed
+        updateFaileddialog
       fi
+    else
+      updateFaileddialog
     fi
     (
       # Download update file
@@ -167,13 +172,13 @@ function updateLoader() {
         mv -f "${TMP_PATH}/bzImage-arc" "${ARC_BZIMAGE_FILE}"
         mv -f "${TMP_PATH}/initrd-arc" "${ARC_RAMDISK_FILE}"
         rm -f "${TMP_PATH}/update.zip"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error getting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Loader" \
       --progressbox "Updating Loader..." 20 70
   fi
@@ -238,13 +243,13 @@ function updateAddons() {
           tar -xaf "${F}" -C "${ADDONS_PATH}/${ADDON}"
           rm -f "${F}"
         done
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Addons" \
       --progressbox "Updating Addons..." 20 70
   fi
@@ -301,13 +306,13 @@ function updatePatches() {
         echo "Installing new Patches..."
         unzip -oq "${TMP_PATH}/patches.zip" -d "${PATCH_PATH}"
         rm -f "${TMP_PATH}/patches.zip"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Patches" \
       --progressbox "Updating Patches..." 20 70
   fi
@@ -364,13 +369,13 @@ function updateCustom() {
         echo "Installing new Custom Kernel..."
         unzip -oq "${TMP_PATH}/custom.zip" -d "${CUSTOM_PATH}"
         rm -f "${TMP_PATH}/custom.zip"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Custom" \
       --progressbox "Updating Custom..." 20 70
   fi
@@ -446,13 +451,13 @@ function updateModules() {
             writeConfigKey "modules.${ID}" "" "${USER_CONFIG_FILE}"
           done < <(getAllModules "${PLATFORM}" "${KVERP}")
         fi
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Modules" \
       --progressbox "Updating Modules..." 20 70
   fi
@@ -485,7 +490,6 @@ function updateConfigs() {
     (
       # Download update file
       local URL="https://github.com/AuxXxilium/arc-configs/releases/download/${TAG}/configs.zip"
-      local SHA="https://github.com/AuxXxilium/arc-configs/releases/download/${TAG}/checksum.sha256"
       echo "Downloading ${TAG}"
       if [ "${ARCNIC}" == "auto" ]; then
         curl -#kL "${URL}" -o "${TMP_PATH}/configs.zip" 2>&1 | while IFS= read -r -n1 char; do
@@ -493,31 +497,30 @@ function updateConfigs() {
           [[ $char == % ]] && echo "Download: $progress%" && progress="" && keep=0 ;
           [[ $keep == 1 ]] && progress="$progress$char" ;
         done
-        curl -skL "${SHA}" -o "${TMP_PATH}/checksum.sha256"
       else
         curl --interface ${ARCNIC} -#kL "${URL}" -o "${TMP_PATH}/configs.zip" 2>&1 | while IFS= read -r -n1 char; do
           [[ $char =~ [0-9] ]] && keep=1 ;
           [[ $char == % ]] && echo "Download: $progress%" && progress="" && keep=0 ;
           [[ $keep == 1 ]] && progress="$progress$char" ;
         done
-        curl --interface ${ARCNIC} -skL "${SHA}" -o "${TMP_PATH}/checksum.sha256"
       fi
-      if [ "$(sha256sum "${TMP_PATH}/configs.zip" | awk '{print $1}')" = "$(cat ${TMP_PATH}/checksum.sha256 | awk '{print $1}')" ]; then
+      if [ -f "${TMP_PATH}/configs.zip" ]; then
         echo "Download successful!"
         rm -rf "${MODEL_CONFIG_PATH}"
         mkdir -p "${MODEL_CONFIG_PATH}"
         echo "Installing new Configs..."
         unzip -oq "${TMP_PATH}/configs.zip" -d "${MODEL_CONFIG_PATH}"
         rm -f "${TMP_PATH}/configs.zip"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update Configs" \
       --progressbox "Updating Configs..." 20 70
+    writeConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
   fi
   return 0
 }
@@ -569,13 +572,13 @@ function updateLKMs() {
         echo "Installing new LKMs..."
         unzip -oq "${TMP_PATH}/rp-lkms.zip" -d "${LKMS_PATH}"
         rm -f "${TMP_PATH}/rp-lkms.zip"
+        echo "Update done!"
+        sleep 2
       else
         echo "Error extracting new Version!"
         sleep 5
         updateFailed
       fi
-      echo "Update done!"
-      sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Update LKMs" \
       --progressbox "Updating LKMs..." 20 70
   fi
@@ -587,10 +590,24 @@ function updateLKMs() {
 function updateFailed() {
   local AUTOMATED="$(readConfigKey "automated" "${USER_CONFIG_FILE}")"
   if [ "${AUTOMATED}" = "true" ]; then
+    echo "Update failed!"
+    sleep 5
+    exec reboot
+    exit 1
+  else
+    echo "Update failed!"
+    exit 1
+  fi
+}
+
+function updateFaileddialog() {
+  local AUTOMATED="$(readConfigKey "automated" "${USER_CONFIG_FILE}")"
+  if [ "${AUTOMATED}" = "true" ]; then
     dialog --backtitle "$(backtitle)" --title "Update Failed" \
       --infobox "Update failed!" 0 0
     sleep 5
     exec reboot
+    exit 1
   else
     dialog --backtitle "$(backtitle)" --title "Update Failed" \
       --msgbox "Update failed!" 0 0

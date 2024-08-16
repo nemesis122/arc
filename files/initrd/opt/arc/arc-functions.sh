@@ -324,6 +324,8 @@ function cmdlineMenu() {
             0) # ok-button
               NAME="$(cat "${TMP_PATH}/resp" | sed -n '1p')"
               VALUE="$(cat "${TMP_PATH}/resp" | sed -n '2p')"
+              [[ "${NAME}" = *= ]] && NAME="${NAME%?}"
+              [[ "${VALUE}" = =* ]] && VALUE="${VALUE#*=}"
               if [ -z "${NAME//\"/}" ]; then
                 dialog --clear --backtitle "$(backtitle)" --title "User Cmdline" \
                   --yesno "Invalid Parameter Name, retry?" 0 0
@@ -527,6 +529,8 @@ function synoinfoMenu() {
             0) # ok-button
               NAME="$(cat "${TMP_PATH}/resp" | sed -n '1p')"
               VALUE="$(cat "${TMP_PATH}/resp" | sed -n '2p')"
+              [[ "${NAME}" = *= ]] && NAME="${NAME%?}"
+              [[ "${VALUE}" = =* ]] && VALUE="${VALUE#*=}"
               if [ -z "${NAME//\"/}" ]; then
                 dialog --clear --backtitle "$(backtitle)" --title "User Cmdline" \
                   --yesno "Invalid Parameter Name, retry?" 0 0
@@ -819,6 +823,7 @@ function backupMenu() {
 ###############################################################################
 # Shows update menu to user
 function updateMenu() {
+  ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
   NEXT="1"
   while true; do
     dialog --backtitle "$(backtitle)" --cancel-label "Exit" \
@@ -832,7 +837,7 @@ function updateMenu() {
       7 "Update Modules" \
       8 "Update Patches" \
       9 "Update Custom Kernel" \
-      0 "Switch Buildroot" \
+      0 "Branch: (${ARCBRANCH:-"stable"})" \
       2>"${TMP_PATH}/resp"
     [ $? -ne 0 ] && break
     case "$(cat ${TMP_PATH}/resp)" in
@@ -1052,19 +1057,19 @@ function updateMenu() {
         # Ask for Arc Branch
         dialog --clear --backtitle "$(backtitle)" --title "Switch Buildsystem" \
           --menu "Which Branch?" 7 50 0 \
-          1 "x - latest Buildsystem" \
-          2 "s - stable Buildsystem" \
+          1 "Stable Buildsystem" \
+          2 "Next Buildsystem (latest)" \
         2>"${TMP_PATH}/opts"
         opts=$(cat ${TMP_PATH}/opts)
         [ -z "${opts}" ] && return 1
         if [ ${opts} -eq 1 ]; then
           writeConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
         elif [ ${opts} -eq 2 ]; then
-          writeConfigKey "arc.branch" "s" "${USER_CONFIG_FILE}"
+          writeConfigKey "arc.branch" "next" "${USER_CONFIG_FILE}"
         fi
         ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
         dialog --backtitle "$(backtitle)" --title "Switch Buildsystem" --aspect 18 \
-          --msgbox "Updates are using ${ARCBRANCH} Branch.\nYou need to Update the Loader now!" 0 0
+          --msgbox "Using ${ARCBRANCH} Buildsystem, now.\nUpdate the Loader to apply the changes!" 7 50
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
         BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
         ;;
@@ -1206,7 +1211,8 @@ function sysinfo() {
     TEXT+="\n\Zb$(lspci -s ${NETBUS} -nnk | awk '{$1=""}1' | awk '{$1=$1};1')\Zn\n"
   done
   # Print Config Informations
-  TEXT+="\n\Z4> Arc: ${ARC_VERSION} | Branch: ${ARCBRANCH:-x}\Zn"
+  TEXT+="\n\Z4> Arc: ${ARC_VERSION}\Zn"
+  [ -n "${ARCBRANCH}" ] && TEXT+="\n  Branch: \Zb${ARCBRANCH}\Zn"
   TEXT+="\n  Subversion: \ZbAddons ${ADDONSVERSION} | Configs ${CONFIGSVERSION} | LKM ${LKMVERSION} | Modules ${MODULESVERSION} | Patches ${PATCHESVERSION}\Zn"
   TEXT+="\n  Config | Build: \Zb${CONFDONE} | ${BUILDDONE}\Zn"
   TEXT+="\n  Config Version: \Zb${CONFIGVER}\Zn"
@@ -1214,13 +1220,14 @@ function sysinfo() {
     TEXT+="\n\Z4> DSM ${PRODUCTVER}: ${MODELID:-${MODEL}}\Zn"
     TEXT+="\n  Kernel | LKM: \Zb${KVER} | ${LKM}\Zn"
     TEXT+="\n  Platform | DeviceTree: \Zb${PLATFORM} | ${DT}\Zn"
-    TEXT+="\n  Arc Patch | Kernelload: \Zb${ARCPATCH} | ${KERNELLOAD}\Zn"
+    TEXT+="\n  Arc Patch: \Zb${ARCPATCH}\Zn"
+    TEXT+="\n  Kernelload: \Zb${KERNELLOAD}\Zn"
     TEXT+="\n  Directboot: \Zb${DIRECTBOOT}\Zn"
     TEXT+="\n  Addons selected: \Zb${ADDONSINFO}\Zn"
   fi
   TEXT+="\n  Modules loaded: \Zb${MODULESINFO}\Zn"
   if [ "${CONFDONE}" == "true" ]; then
-    TEXT+="\n  User Cmdline: \Zb${USERCMDLINEINFO}\Zn"
+    [ -n "${USERCMDLINEINFO}" ] && TEXT+="\n  User Cmdline: \Zb${USERCMDLINEINFO}\Zn"
     TEXT+="\n  User Synoinfo: \Zb${USERSYNOINFO}\Zn"
   fi
   TEXT+="\n"
@@ -1715,11 +1722,12 @@ function formatDisks() {
   rm -f "${TMP_PATH}/opts"
   while read -r KNAME SIZE TYPE PKNAME; do
     [ -z "${KNAME}" ] && continue
+    [ "${KNAME}" = "N/A" ] && continue
     [[ "${KNAME}" = /dev/md* ]] && continue
     [[ "${KNAME}" = "${LOADER_DISK}" || "${PKNAME}" = "${LOADER_DISK}" ]] && continue
     [ -z "${SIZE}" ] && SIZE="Unknown"
-    printf "\"%s\" \"%-6s %-4s\" \"off\"\n" "${KNAME}" "${SIZE}" "${TYPE}" >>"${TMP_PATH}/opts"
-  done < <(lsblk -pno KNAME,SIZE,TYPE,PKNAME)
+    printf "\"%s\" \"%-6s %-4s %s\" \"off\"\n" "${KNAME}" "${SIZE}" "${TYPE}" >>"${TMP_PATH}/opts"
+  done < <(lsblk -Jpno KNAME,SIZE,TYPE,PKNAME 2>/dev/null | sed 's|null|"N/A"|g' | jq -r '.blockdevices[] | "\(.kname) \(.size) \(.type) \(.pkname)"' 2>/dev/null)
   if [ ! -f "${TMP_PATH}/opts" ]; then
     dialog --backtitle "$(backtitle)" --title "Format Disks" \
       --msgbox "No disk found!" 0 0
@@ -1816,11 +1824,13 @@ function cloneLoader() {
   rm -f "${TMP_PATH}/opts" >/dev/null
   while read -r KNAME SIZE TYPE PKNAME; do
     [ -z "${KNAME}" ] && continue
+    [ "${KNAME}" = "N/A" ] && continue
+    [ "${TYPE}" != "disk" ] && continue
     [[ "${KNAME}" = /dev/md* ]] && continue
     [[ "${KNAME}" = "${LOADER_DISK}" || "${PKNAME}" = "${LOADER_DISK}" ]] && continue
     [ -z "${SIZE}" ] && SIZE="Unknown"
-    printf "\"%s\" \"%-6s %-4s\" \"off\"\n" "${KNAME}" "${SIZE}" "${TYPE}" >>"${TMP_PATH}/opts"
-  done < <(lsblk -dpno KNAME,SIZE,TYPE,PKNAME | sort)
+    printf "\"%s\" \"%-6s %-4s %s\" \"off\"\n" "${KNAME}" "${SIZE}" "${TYPE}" >>"${TMP_PATH}/opts"
+  done < <(lsblk -Jpno KNAME,SIZE,TYPE,PKNAME 2>/dev/null | sed 's|null|"N/A"|g' | jq -r '.blockdevices[] | "\(.kname) \(.size) \(.type) \(.pkname)"' 2>/dev/null)
   if [ ! -f "${TMP_PATH}/opts" ]; then
     dialog --backtitle "$(backtitle)" --colors --title "Clone Loader" \
       --msgbox "No disk found!" 0 0
@@ -1941,7 +1951,7 @@ function greplogs() {
   if [ -n "$(ls /sys/fs/pstore 2>/dev/null)" ]; then
     mkdir -p "${TMP_PATH}/logs/pstore"
     cp -rf /sys/fs/pstore/* "${TMP_PATH}/logs/pstore"
-    zlib-flate -uncompress </sys/fs/pstore/*.z >"${TMP_PATH}/logs/pstore/ps.log" 2>/dev/null
+    [ -n "$(ls /sys/fs/pstore/*.z 2>/dev/null)" ] && zlib-flate -uncompress </sys/fs/pstore/*.z >"${TMP_PATH}/logs/pstore/ps.log" 2>/dev/null
     PSTORE=1
   fi
   if [ ${PSTORE} -eq 1 ]; then
@@ -2035,30 +2045,75 @@ function satadomMenu() {
 ###############################################################################
 # Decrypt Menu
 function decryptMenu() {
-  if [ -f "${S_FILE_ENC}" ]; then
-    CONFIGSVERSION="$(cat "${MODEL_CONFIG_PATH}/VERSION")"
-    cp -f "${S_FILE}" "${S_FILE}.bak"
-    dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
-      --inputbox "Enter Decryption Key for ${CONFIGSVERSION}" 7 40 2>"${TMP_PATH}/resp"
-    [ $? -ne 0 ] && return
-    ARC_KEY=$(cat "${TMP_PATH}/resp" | tr '[:lower:]' '[:upper:]')
-    if openssl enc -in "${S_FILE_ENC}" -out "${S_FILE_ARC}" -d -aes-256-cbc -k "${ARC_KEY}" 2>/dev/null; then
-      dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
-        --msgbox "Decrypt successful: You can use Arc Patch." 5 50
-      cp -f "${S_FILE_ARC}" "${S_FILE}"
-      writeConfigKey "arc.key" "${ARC_KEY}" "${USER_CONFIG_FILE}"
+  OFFLINE="$(readConfigKey "arc.offline" "${USER_CONFIG_FILE}")"
+  if [ "${OFFLINE}" = "false" ]; then
+    local TAG="$(curl -m 10 -skL "https://api.github.com/repos/AuxXxilium/arc-configs/releases" | jq -r ".[].tag_name" | sort -rV | head -1)"
+    if [ -n "${TAG}" ]; then
+      (
+        # Download update file
+        local URL="https://github.com/AuxXxilium/arc-configs/releases/download/${TAG}/arc-configs.zip"
+        echo "Downloading ${TAG}"
+        if [ "${ARCNIC}" == "auto" ]; then
+          curl -#kL "${URL}" -o "${TMP_PATH}/configs.zip" 2>&1 | while IFS= read -r -n1 char; do
+            [[ $char =~ [0-9] ]] && keep=1 ;
+            [[ $char == % ]] && echo "Download: $progress%" && progress="" && keep=0 ;
+            [[ $keep == 1 ]] && progress="$progress$char" ;
+          done
+        else
+          curl --interface ${ARCNIC} -#kL "${URL}" -o "${TMP_PATH}/configs.zip" 2>&1 | while IFS= read -r -n1 char; do
+            [[ $char =~ [0-9] ]] && keep=1 ;
+            [[ $char == % ]] && echo "Download: $progress%" && progress="" && keep=0 ;
+            [[ $keep == 1 ]] && progress="$progress$char" ;
+          done
+        fi
+        if [ -f "${TMP_PATH}/configs.zip" ]; then
+          echo "Download successful!"
+          rm -rf "${MODEL_CONFIG_PATH}"
+          mkdir -p "${MODEL_CONFIG_PATH}"
+          echo "Installing new Configs..."
+          unzip -oq "${TMP_PATH}/configs.zip" -d "${MODEL_CONFIG_PATH}"
+          rm -f "${TMP_PATH}/configs.zip"
+          echo "Installation done!"
+          sleep 2
+        else
+          echo "Error extracting new Version!"
+          sleep 5
+        fi
+      ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Arc Decrypt" \
+        --progressbox "Installing Arc Patch Configs..." 20 70
     else
-      cp -f "${S_FILE}.bak" "${S_FILE}"
       dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
-        --msgbox "Decrypt failed: Wrong Key for this Version." 5 50
-      writeConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
+        --msgbox "Can't connect to Github.\nCheck your Network!" 6 50
+      return
     fi
+    if [ -f "${S_FILE_ENC}" ]; then
+      CONFIGSVERSION="$(cat "${MODEL_CONFIG_PATH}/VERSION")"
+      cp -f "${S_FILE}" "${S_FILE}.bak"
+      dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
+        --inputbox "Enter Decryption Key for ${CONFIGSVERSION}\nKey is available in my Discord." 8 40 2>"${TMP_PATH}/resp"
+      [ $? -ne 0 ] && return
+      ARC_KEY=$(cat "${TMP_PATH}/resp" | tr '[:lower:]' '[:upper:]')
+      if openssl enc -in "${S_FILE_ENC}" -out "${S_FILE_ARC}" -d -aes-256-cbc -k "${ARC_KEY}" 2>/dev/null; then
+        dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
+          --msgbox "Decrypt successful: You can use Arc Patch." 5 50
+        cp -f "${S_FILE_ARC}" "${S_FILE}"
+        writeConfigKey "arc.key" "${ARC_KEY}" "${USER_CONFIG_FILE}"
+      else
+        cp -f "${S_FILE}.bak" "${S_FILE}"
+        dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
+          --msgbox "Decrypt failed: Wrong Key for this Version." 5 50
+        writeConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
+      fi
+    fi
+    writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
+    CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
+    writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
+    BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
+    ARC_KEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
+  else
+    dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
+      --msgbox "Not available in offline Mode!" 5 50
   fi
-  writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
-  CONFDONE="$(readConfigKey "arc.confdone" "${USER_CONFIG_FILE}")"
-  writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
-  BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
-  ARC_KEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
   return
 }
 
@@ -2098,9 +2153,7 @@ function rebootMenu() {
   echo -e "network \"Arc: Restart Network Service\"" >>"${TMP_PATH}/opts"
   echo -e "recovery \"DSM: Recovery Mode\"" >>"${TMP_PATH}/opts"
   echo -e "junior \"DSM: Reinstall Mode\"" >>"${TMP_PATH}/opts"
-  if efibootmgr 2>/dev/null | grep -q "^Boot0000"; then
-    echo -e "bios \"System: BIOS/UEFI\"" >>"${TMP_PATH}/opts"
-  fi
+  echo -e "bios \"System: BIOS/UEFI\"" >>"${TMP_PATH}/opts"
   echo -e "poweroff \"System: Shutdown\"" >>"${TMP_PATH}/opts"
   echo -e "shell \"System: Shell Cmdline\"" >>"${TMP_PATH}/opts"
   dialog --backtitle "$(backtitle)" --title "Power Menu" \
@@ -2111,20 +2164,18 @@ function rebootMenu() {
   [ -z "${resp}" ] && return
   REDEST=${resp}
   dialog --backtitle "$(backtitle)" --title "Power Menu" \
-    --infobox "${REDEST} selected ...!" 0 0
-  if [ "${REDEST}" == "bios" ]; then
-    efibootmgr -n 0000 >/dev/null 2>&1
-    reboot
-    exit 0
-  elif [ "${REDEST}" == "poweroff" ]; then
+    --infobox "${REDEST} selected ...!" 5 30
+  if [ "${REDEST}" == "poweroff" ]; then
     poweroff
     exit 0
   elif [ "${REDEST}" == "shell" ]; then
     clear
     exit 0
   elif [ "${REDEST}" == "init" ]; then
+    clear
     init.sh
   elif [ "${REDEST}" == "network" ]; then
+    clear
     /etc/init.d/S41dhcpcd restart
     arc.sh
   else

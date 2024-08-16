@@ -65,6 +65,8 @@ BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
 # Get Keymap and Timezone Config
 ntpCheck
 
+KEYMAP="$(readConfigKey "keymap" "${USER_CONFIG_FILE}")"
+
 # Check for Dynamic Mode
 dynCheck
 
@@ -461,9 +463,9 @@ function arcSettings() {
     # Select Addons
     dialog --backtitle "$(backtitle)" --colors --title "DSM Addons" \
       --infobox "Loading Addons Table..." 3 40
-    writeConfigKey "addons.acpid" "" "${USER_CONFIG_FILE}"
-    writeConfigKey "addons.cpuinfo" "" "${USER_CONFIG_FILE}"
-    writeConfigKey "addons.storagepanel" "" "${USER_CONFIG_FILE}"
+    initConfigKey "addons.acpid" "" "${USER_CONFIG_FILE}"
+    initConfigKey "addons.cpuinfo" "" "${USER_CONFIG_FILE}"
+    initConfigKey "addons.storagepanel" "" "${USER_CONFIG_FILE}"
     addonSelection
     # Check for DT and HBA/Raid Controller
     if [ "${PLATFORM}" != "epyc7002" ]; then
@@ -569,9 +571,10 @@ function arcSummary() {
   if [ "${DT}" == "false" ] && [ "${REMAP}" == "user" ]; then
     if [ -z "${PORTMAP}" ] && [ -z "${DISKMAP}"] && [ -z "${PORTREMAP}" ] && [ -z "${AHCIPORTREMAP}" ]; then
       dialog --backtitle "$(backtitle)" --title "Arc Error" \
-        --msgbox "ERROR: You selected Portmap: User and didn't set any values. -> Can't build Loader." 5 80
+        --msgbox "ERROR: You selected Portmap: User and didn't set any values. -> Can't build Loader!\nGo need to go Cmdline Options and add your Values." 6 80
       return 1
     fi
+  fi
   # Print Summary
   SUMMARY="\Z4> DSM Information\Zn"
   SUMMARY+="\n>> DSM Model: \Zb${MODEL}\Zn"
@@ -904,8 +907,8 @@ else
   [ "${BUILDDONE}" == "true" ] && NEXT="3" || NEXT="1"
   while true; do
     echo "= \"\Z4========== Main ==========\Zn \" "                                            >"${TMP_PATH}/menu"
-    if [ -z "${ARC_KEY}" ]; then
-      echo "0 \"Decrypt Arc Patch \" "                                                        >>"${TMP_PATH}/menu"
+    if [ -z "${ARC_KEY}" ] && [ "${OFFLINE}" = "false" ]; then
+      echo "0 \"Install Arc Patch Configs\" "                                                 >>"${TMP_PATH}/menu"
     fi
     echo "1 \"Choose Model \" "                                                               >>"${TMP_PATH}/menu"
     if [ "${CONFDONE}" == "true" ]; then
