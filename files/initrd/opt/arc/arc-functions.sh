@@ -584,7 +584,6 @@ function synoinfoMenu() {
         writeConfigKey "synoinfo.support_trim" "yes" "${USER_CONFIG_FILE}"
         writeConfigKey "synoinfo.support_disk_hibernation" "yes" "${USER_CONFIG_FILE}"
         writeConfigKey "synoinfo.support_btrfs_dedupe" "yes" "${USER_CONFIG_FILE}"
-        writeConfigKey "synoinfo.support_tiny_btrfs_dedupe" "yes" "${USER_CONFIG_FILE}"
         dialog --backtitle "$(backtitle)" --title "Add Trim/Dedup to Synoinfo" --aspect 18 \
           --msgbox "Synoinfo set successful!" 0 0
         writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
@@ -1064,8 +1063,10 @@ function updateMenu() {
         [ -z "${opts}" ] && return 1
         if [ ${opts} -eq 1 ]; then
           writeConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
+          rm -f "${PART1_PATH}/ARC-BRANCH"
         elif [ ${opts} -eq 2 ]; then
           writeConfigKey "arc.branch" "next" "${USER_CONFIG_FILE}"
+          echo "next" >"${PART1_PATH}/ARC-BRANCH"
         fi
         ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
         dialog --backtitle "$(backtitle)" --title "Switch Buildsystem" --aspect 18 \
@@ -2092,7 +2093,7 @@ function decryptMenu() {
       dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
         --inputbox "Enter Decryption Key for ${CONFIGSVERSION}\nKey is available in my Discord." 8 40 2>"${TMP_PATH}/resp"
       [ $? -ne 0 ] && return
-      ARC_KEY=$(cat "${TMP_PATH}/resp" | tr '[:lower:]' '[:upper:]')
+      ARC_KEY=$(cat "${TMP_PATH}/resp")
       if openssl enc -in "${S_FILE_ENC}" -out "${S_FILE_ARC}" -d -aes-256-cbc -k "${ARC_KEY}" 2>/dev/null; then
         dialog --backtitle "$(backtitle)" --colors --title "Arc Decrypt" \
           --msgbox "Decrypt successful: You can use Arc Patch." 5 50

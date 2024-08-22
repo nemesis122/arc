@@ -12,7 +12,6 @@
 . ${ARC_PATH}/include/network.sh
 . ${ARC_PATH}/include/update.sh
 . ${ARC_PATH}/arc-functions.sh
-. ${ARC_PATH}/boot.sh
 
 # Check for System
 systemCheck
@@ -230,9 +229,11 @@ function arcModel() {
     PRODUCTVER=""
     MODEL="${resp}"
     PLATFORM="$(grep -w "${MODEL}" "${TMP_PATH}/modellist" | awk '{print $2}' | head -n 1)"
-    MODELID=$(echo ${MODEL} | sed 's/d$/D/; s/rp$/RP/; s/rp+/RP+/')
     writeConfigKey "model" "${MODEL}" "${USER_CONFIG_FILE}"
+    writeConfigKey "modelid" "" "${USER_CONFIG_FILE}"
     writeConfigKey "productver" "" "${USER_CONFIG_FILE}"
+    writeConfigKey "buildnum" "" "${USER_CONFIG_FILE}"
+    writeConfigKey "smallnum" "" "${USER_CONFIG_FILE}"
     writeConfigKey "addons" "{}" "${USER_CONFIG_FILE}"
     writeConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
     writeConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
@@ -245,7 +246,6 @@ function arcModel() {
     writeConfigKey "pathash" "" "${USER_CONFIG_FILE}"
     writeConfigKey "arc.remap" "" "${USER_CONFIG_FILE}"
     writeConfigKey "sn" "" "${USER_CONFIG_FILE}"
-    writeConfigKey "modelid" "${MODELID}" "${USER_CONFIG_FILE}"
     writeConfigKey "platform" "${PLATFORM}" "${USER_CONFIG_FILE}"
     writeConfigKey "ramdisk-hash" "" "${USER_CONFIG_FILE}"
     writeConfigKey "zimage-hash" "" "${USER_CONFIG_FILE}"
@@ -293,7 +293,7 @@ function arcVersion() {
     fi
   fi
   dialog --backtitle "$(backtitle)" --title "Arc Config" \
-    --infobox "Reconfiguring Addons, Modules and Synoinfo" 3 50
+    --infobox "Reconfiguring Addons, Cmdline, Modules and Synoinfo" 3 60
   # Reset Synoinfo
   writeConfigKey "synoinfo" "{}" "${USER_CONFIG_FILE}"
   while IFS=': ' read -r KEY VALUE; do
@@ -314,11 +314,13 @@ function arcVersion() {
   else
     KVERP="${KVER}"
   fi
-  # Rewrite modules
-  writeConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
-  while read -r ID DESC; do
-    writeConfigKey "modules.\"${ID}\"" "" "${USER_CONFIG_FILE}"
-  done < <(getAllModules "${PLATFORM}" "${KVERP}")
+  if [ "${AUTOMATED}" == "false" ]; then
+    # Rewrite modules
+    writeConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
+    while read -r ID DESC; do
+      writeConfigKey "modules.\"${ID}\"" "" "${USER_CONFIG_FILE}"
+    done < <(getAllModules "${PLATFORM}" "${KVERP}")
+  fi
   # Check for Only Version
   if [ "${ONLYVERSION}" == "true" ]; then
     # Build isn't done
@@ -374,16 +376,12 @@ function arcPatch() {
             --inputbox "Please enter a valid SN!" 7 50 "" \
             2>"${TMP_PATH}/resp"
           [ $? -ne 0 ] && break 2
-          SN="$(cat ${TMP_PATH}/resp)"
+          SN="$(cat ${TMP_PATH}/resp | tr '[:lower:]' '[:upper:]')"
           if [ -z "${SN}" ]; then
             return
-          elif [ $(validateSerial ${MODEL} ${SN}) -eq 1 ]; then
+          else
             break
           fi
-          # At present, the SN rules are not complete, and many SNs are not truly invalid, so not provide tips now.
-          dialog --backtitle "$(backtitle)" --colors --title "DSM SN" \
-            --yesno "SN looks invalid, continue?" 5 50
-          [ $? -eq 0 ] && break
         done
         writeConfigKey "arc.patch" "user" "${USER_CONFIG_FILE}"
       fi
@@ -406,16 +404,12 @@ function arcPatch() {
             --inputbox "Please enter a SN " 7 50 "" \
             2>"${TMP_PATH}/resp"
           [ $? -ne 0 ] && break 2
-          SN="$(cat ${TMP_PATH}/resp)"
+          SN="$(cat ${TMP_PATH}/resp | tr '[:lower:]' '[:upper:]')"
           if [ -z "${SN}" ]; then
             return
-          elif [ $(validateSerial ${MODEL} ${SN}) -eq 1 ]; then
+          else
             break
           fi
-          # At present, the SN rules are not complete, and many SNs are not truly invalid, so not provide tips now.
-          dialog --backtitle "$(backtitle)" --colors --title "DSM SN" \
-            --yesno "SN looks invalid, continue?" 5 50
-          [ $? -eq 0 ] && break
         done
         writeConfigKey "arc.patch" "user" "${USER_CONFIG_FILE}"
       fi
@@ -624,6 +618,12 @@ function arcSummary() {
 ###############################################################################
 # Building Loader Online
 function make() {
+  # Check for Arc Patch
+  ARCCONF="$(readConfigKey "${MODEL}.serial" "${S_FILE}" 2>/dev/null)"
+  if [ -z "${ARCCONF}" ]; then
+    deleteConfigKey "addons.amepatch" "${USER_CONFIG_FILE}"
+    deleteConfigKey "addons.sspatch" "${USER_CONFIG_FILE}"
+  fi
   # Read Model Config
   MODEL="$(readConfigKey "model" "${USER_CONFIG_FILE}")"
   MODELID="$(readConfigKey "modelid" "${USER_CONFIG_FILE}")"
@@ -693,9 +693,10 @@ function make() {
     if [ "${AUTOMATED}" == "false" ] && [ "${VALID}" == "false" ]; then
         MSG="Failed to get PAT Data.\n"
         MSG+="Please manually fill in the URL and Hash of PAT.\n"
-        MSG+="You will find these Data at: https://download.synology.com"
+        MSG+="You will find these Data at:\n"
+        MSG+="https://auxxxilium.tech/wiki/arc-loader-arc-loader/url-hash-liste"
         dialog --backtitle "$(backtitle)" --colors --title "Arc Build" --default-button "OK" \
-          --form "${MSG}" 10 110 2 "URL" 1 1 "${PAT_URL}" 1 7 100 0 "HASH" 2 1 "${PAT_HASH}" 2 7 100 0 \
+          --form "${MSG}" 10 110 2 "URL" 1 1 "${PAT_URL}" 1 7 100 0 "HASH" 2 1 "${PAT_HASH}" 2 8 100 0 \
           2>"${TMP_PATH}/resp"
         RET=$?
         [ ${RET} -eq 0 ]             # ok-button
@@ -824,6 +825,8 @@ function make() {
       --progressbox "Doing the Magic..." 20 70
   fi
   if [ -f "${ORI_ZIMAGE_FILE}" ] && [ -f "${ORI_RDGZ_FILE}" ] && [ -f "${MOD_ZIMAGE_FILE}" ] && [ -f "${MOD_RDGZ_FILE}" ]; then
+    MODELID=$(echo ${MODEL} | sed 's/d$/D/; s/rp$/RP/; s/rp+/RP+/')
+    writeConfigKey "modelid" "${MODELID}" "${USER_CONFIG_FILE}"
     writeConfigKey "arc.builddone" "true" "${USER_CONFIG_FILE}"
     BUILDDONE="$(readConfigKey "arc.builddone" "${USER_CONFIG_FILE}")"
     arcFinish
@@ -888,7 +891,7 @@ function boot() {
   dialog --backtitle "$(backtitle)" --title "Arc Boot" \
     --infobox "Booting DSM...\nPlease stay patient!" 4 25
   sleep 2
-  bootDSM
+  . ${ARC_PATH}/boot.sh
   exit 0
 }
 

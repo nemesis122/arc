@@ -6,7 +6,6 @@ set -e
 . ${ARC_PATH}/include/functions.sh
 . ${ARC_PATH}/include/addons.sh
 . ${ARC_PATH}/include/compat.sh
-. ${ARC_PATH}/boot.sh
 
 # Get Loader Disk Bus
 [ -z "${LOADER_DISK}" ] && die "Loader Disk not found!"
@@ -66,14 +65,15 @@ initConfigKey "device.externalcontroller" "false" "${USER_CONFIG_FILE}"
 initConfigKey "keymap" "" "${USER_CONFIG_FILE}"
 initConfigKey "layout" "" "${USER_CONFIG_FILE}"
 initConfigKey "lkm" "prod" "${USER_CONFIG_FILE}"
-# initConfigKey "modblacklist" "evbug,cdc_ether" "${USER_CONFIG_FILE}"
-initConfigKey "modblacklist" "evbug" "${USER_CONFIG_FILE}"
+initConfigKey "modblacklist" "evbug,cdc_ether" "${USER_CONFIG_FILE}"
 initConfigKey "modules" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "model" "" "${USER_CONFIG_FILE}"
 initConfigKey "modelid" "" "${USER_CONFIG_FILE}"
 initConfigKey "network" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "platform" "" "${USER_CONFIG_FILE}"
 initConfigKey "productver" "" "${USER_CONFIG_FILE}"
+initConfigKey "buildnum" "" "${USER_CONFIG_FILE}"
+initConfigKey "smallnum" "" "${USER_CONFIG_FILE}"
 initConfigKey "ramdisk-hash" "" "${USER_CONFIG_FILE}"
 initConfigKey "rd-compressed" "false" "${USER_CONFIG_FILE}"
 initConfigKey "satadom" "2" "${USER_CONFIG_FILE}"
@@ -85,7 +85,7 @@ if grep -q "automated_arc" /proc/cmdline; then
 else
   writeConfigKey "automated" "false" "${USER_CONFIG_FILE}"
 fi
-[ -f "${PART1_PATH}/ARC-BRANCH" ] && initConfigKey "arc.branch" "next" "${USER_CONFIG_FILE}" || initConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
+[ -f "${PART1_PATH}/ARC-BRANCH" ] && writeConfigKey "arc.branch" "next" "${USER_CONFIG_FILE}" || writeConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
 [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null 2>&1 || true
 # Check for compatibility
 compatboot
@@ -114,7 +114,7 @@ for ETH in ${ETHX}; do
     sleep 1
   fi
   [ "${ETH::3}" = "eth" ] && ethtool -s ${ETH} wol g 2>/dev/null || true
-  [ "${ETH::3}" = "eth" ] && ethtool -K ${ETH} rxhash off 2>/dev/null || true
+  # [ "${ETH::3}" = "eth" ] && ethtool -K ${ETH} rxhash off 2>/dev/null || true
   initConfigKey "${ETH}" "${MACR}" "${USER_CONFIG_FILE}"
 done
 ETHN="$(echo ${ETHX} | wc -w)"
@@ -166,7 +166,7 @@ elif grep -q "update_arc" /proc/cmdline; then
   echo -e "\033[1;34mStarting Update Mode...\033[0m"
 elif [ "${BUILDDONE}" == "true" ]; then
   echo -e "\033[1;34mStarting DSM Mode...\033[0m"
-  bootDSM
+  boot.sh
   exit 0
 else
   echo -e "\033[1;34mStarting Config Mode...\033[0m"
