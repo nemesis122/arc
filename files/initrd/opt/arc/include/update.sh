@@ -44,7 +44,7 @@ function upgradeLoader () {
     (
       # Download update file
       echo "Downloading ${TAG}"
-      if [ -n "${ARCBRANCH}" ]; then
+      if [ "${ARCBRANCH}" != "stable" ]; then
         local URL="https://github.com/AuxXxilium/arc/releases/download/${TAG}/arc-${TAG}-${ARCBRANCH}.img.zip"
       else
         local URL="https://github.com/AuxXxilium/arc/releases/download/${TAG}/arc-${TAG}.img.zip"
@@ -65,22 +65,26 @@ function upgradeLoader () {
       if [ -f "${TMP_PATH}/arc.img.zip" ]; then
         echo "Downloading Upgradefile successful!"
       else
-        echo "Error downloading Upgradefile!"
-        sleep 5
-        return 1
+        updateFailed
       fi
       unzip -oq "${TMP_PATH}/arc.img.zip" -d "${TMP_PATH}"
       rm -f "${TMP_PATH}/arc.img.zip" >/dev/null
       echo "Installing new Loader Image..."
       # Process complete update
       umount "${PART1_PATH}" "${PART2_PATH}" "${PART3_PATH}"
-      if [ -n "${ARCBRANCH}" ]; then
-        dd if="${TMP_PATH}/arc-${ARCBRANCH}.img" of=$(blkid | grep 'LABEL="ARC3"' | cut -d3 -f1) bs=1M conv=fsync
+      if [ "${ARCBRANCH}" != "stable" ]; then
+        if dd if="${TMP_PATH}/arc-${ARCBRANCH}.img" of=$(blkid | grep 'LABEL="ARC3"' | cut -d3 -f1) bs=1M conv=fsync; then
+          rm -f "${TMP_PATH}/arc-${ARCBRANCH}.img" >/dev/null
+        else
+          updateFailed
+        fi
       else
-        dd if="${TMP_PATH}/arc.img" of=$(blkid | grep 'LABEL="ARC3"' | cut -d3 -f1) bs=1M conv=fsync
+        if dd if="${TMP_PATH}/arc.img" of=$(blkid | grep 'LABEL="ARC3"' | cut -d3 -f1) bs=1M conv=fsync; then
+          rm -f "${TMP_PATH}/arc.img" >/dev/null
+        else
+          updateFailed
+        fi
       fi
-      # Ask for Boot
-      rm -f "${TMP_PATH}/arc.img" >/dev/null
       echo "Upgrade done! -> Rebooting..."
       sleep 2
     ) 2>&1 | dialog --backtitle "$(backtitle)" --title "Upgrade Loader" \
@@ -141,7 +145,7 @@ function updateLoader() {
     (
       # Download update file
       echo "Downloading ${TAG}"
-      if [ -n "${ARCBRANCH}" ]; then
+      if [ "${ARCBRANCH}" != "stable" ]; then
         local URL="https://github.com/AuxXxilium/arc/releases/download/${TAG}/update-${ARCBRANCH}.zip"
         local SHA="https://github.com/AuxXxilium/arc/releases/download/${TAG}/checksum-${ARCBRANCH}.sha256"
       else
@@ -468,6 +472,7 @@ function updateModules() {
 # Update Configs
 function updateConfigs() {
   local ARCNIC="$(readConfigKey "arc.nic" "${USER_CONFIG_FILE}")"
+  local ARCKEY="$(readConfigKey "arc.key" "${USER_CONFIG_FILE}")"
   if [ -z "${1}" ]; then
     # Check for new Version
     idx=0
@@ -506,11 +511,12 @@ function updateConfigs() {
       fi
       if [ -f "${TMP_PATH}/configs.zip" ]; then
         echo "Download successful!"
-        rm -rf "${MODEL_CONFIG_PATH}"
         mkdir -p "${MODEL_CONFIG_PATH}"
         echo "Installing new Configs..."
+        [ -n "${ARCKEY}" ] && cp -f "${S_FILE}" "${TMP_PATH}/serials.yml"
         unzip -oq "${TMP_PATH}/configs.zip" -d "${MODEL_CONFIG_PATH}"
         rm -f "${TMP_PATH}/configs.zip"
+        [ -n "${ARCKEY}" ] && cp -f "${TMP_PATH}/serials.yml" "${S_FILE}"
         echo "Update done!"
         sleep 2
       else
@@ -596,7 +602,7 @@ function updateFailed() {
     exit 1
   else
     echo "Update failed!"
-    exit 1
+    return 1
   fi
 }
 
@@ -611,6 +617,6 @@ function updateFaileddialog() {
   else
     dialog --backtitle "$(backtitle)" --title "Update Failed" \
       --msgbox "Update failed!" 0 0
-    exit 1
+    return 1
   fi
 }

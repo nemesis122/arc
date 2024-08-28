@@ -37,10 +37,10 @@ fi
 # Config Init
 initConfigKey "addons" "{}" "${USER_CONFIG_FILE}"
 initConfigKey "arc" "{}" "${USER_CONFIG_FILE}"
+initConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
 initConfigKey "arc.builddone" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.confdone" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.dynamic" "false" "${USER_CONFIG_FILE}"
-initConfigKey "arc.ipv6" "false" "${USER_CONFIG_FILE}"
 initConfigKey "arc.key" "" "${USER_CONFIG_FILE}"
 initConfigKey "arc.nic" "" "${USER_CONFIG_FILE}"
 initConfigKey "arc.offline" "false" "${USER_CONFIG_FILE}"
@@ -50,11 +50,11 @@ initConfigKey "bootipwait" "30" "${USER_CONFIG_FILE}"
 initConfigKey "directboot" "false" "${USER_CONFIG_FILE}"
 initConfigKey "dsmlogo" "true" "${USER_CONFIG_FILE}"
 initConfigKey "emmcboot" "false" "${USER_CONFIG_FILE}"
-initConfigKey "governor" "performance" "${USER_CONFIG_FILE}"
 initConfigKey "hddsort" "false" "${USER_CONFIG_FILE}"
 initConfigKey "kernel" "official" "${USER_CONFIG_FILE}"
 initConfigKey "kernelload" "power" "${USER_CONFIG_FILE}"
 initConfigKey "kernelpanic" "5" "${USER_CONFIG_FILE}"
+initConfigKey "nanover" "" "${USER_CONFIG_FILE}"
 initConfigKey "odp" "false" "${USER_CONFIG_FILE}"
 initConfigKey "pathash" "" "${USER_CONFIG_FILE}"
 initConfigKey "paturl" "" "${USER_CONFIG_FILE}"
@@ -85,7 +85,10 @@ if grep -q "automated_arc" /proc/cmdline; then
 else
   writeConfigKey "automated" "false" "${USER_CONFIG_FILE}"
 fi
-[ -f "${PART1_PATH}/ARC-BRANCH" ] && writeConfigKey "arc.branch" "next" "${USER_CONFIG_FILE}" || writeConfigKey "arc.branch" "" "${USER_CONFIG_FILE}"
+if [ -f "${PART1_PATH}/ARC-BRANCH" ]; then
+  ARCBRANCH=$(cat "${PART1_PATH}/ARC-BRANCH") && writeConfigKey "arc.branch" "${ARCBRANCH}" "${USER_CONFIG_FILE}"
+  rm -f "${PART1_PATH}/ARC-BRANCH" >/dev/null 2>&1 || true
+fi
 [ -f "${PART3_PATH}/automated" ] && rm -f "${PART3_PATH}/automated" >/dev/null 2>&1 || true
 # Check for compatibility
 compatboot
@@ -231,9 +234,9 @@ echo -e "\033[1;34mLoading Arc Overlay...\033[0m"
 RAM=$(free -m | grep -i mem | awk '{print$2}')
 if [ ${RAM} -le 3500 ]; then
   echo -e "\033[1;31mYou have less than 4GB of RAM, if errors occur in loader creation, please increase the amount of RAM.\033[0m\n"
-  echo -e "\033[1;31mUse arc.sh to proceed. Not recommended!\033[0m\n"
+  echo -e "\033[1;31mUse arc.sh to proceed. Not recommended!\033[0m"
 else
- if grep -q "update_arc" /proc/cmdline; then
+  if grep -q "update_arc" /proc/cmdline; then
     update.sh
   else
     arc.sh
