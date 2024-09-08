@@ -15,7 +15,7 @@ getConfigs "files/p3/configs"
 getPatches "files/p3/patches"
 getCustom "files/p3/custom"
 getTheme "files/p1/boot/grub"
-getOffline "files/p3/configs"
+getOffline "files/p3/offline"
 getBuildrootx "latest" "brx"
 
 # Xbase
@@ -36,7 +36,7 @@ sudo mount ${LOOPX}p3 "/tmp/p3"
 
 [[ ! -f "brx/bzImage-arc" || ! -f "brx/initrd-arc" ]] && return 1
 
-VERSION=$(date +'%y.%-m.dev')
+VERSION=$(date +'%y.%m.dev')
 echo "${VERSION}" >files/p1/ARC-VERSION
 echo "${VERSION}" >VERSION
 echo "next" >files/p1/ARC-BRANCH

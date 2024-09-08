@@ -51,7 +51,6 @@ PLATFORM="$(readConfigKey "platform" "${USER_CONFIG_FILE}")"
 MODEL="$(readConfigKey "model" "${USER_CONFIG_FILE}")"
 MODELID="$(readConfigKey "modelid" "${USER_CONFIG_FILE}")"
 PRODUCTVER="$(readConfigKey "productver" "${USER_CONFIG_FILE}")"
-NANOVER="$(readConfigKey "nanover" "${USER_CONFIG_FILE}")"
 BUILDNUM="$(readConfigKey "buildnum" "${USER_CONFIG_FILE}")"
 SMALLNUM="$(readConfigKey "smallnum" "${USER_CONFIG_FILE}")"
 LKM="$(readConfigKey "lkm" "${USER_CONFIG_FILE}")"
@@ -62,17 +61,14 @@ VENDOR="$(dmesg 2>/dev/null | grep -i "DMI:" | sed 's/\[.*\] DMI: //i')"
 echo -e "\033[1;37mDSM:\033[0m"
 echo -e "Model: \033[1;37m${MODELID:-${MODEL}}\033[0m"
 echo -e "Platform: \033[1;37m${PLATFORM}\033[0m"
-if [ -n "${NANOVER}" ]; then
-  echo -e "Version: \033[1;37m${PRODUCTVER}.${NANOVER}(${BUILDNUM}$([ ${SMALLNUM:-0} -ne 0 ] && echo "u${SMALLNUM}"))\033[0m"
-else
-  echo -e "Version: \033[1;37m${PRODUCTVER}(${BUILDNUM}$([ ${SMALLNUM:-0} -ne 0 ] && echo "u${SMALLNUM}"))\033[0m"
-fi
+echo -e "Version: \033[1;37m${PRODUCTVER} (${BUILDNUM}$([ ${SMALLNUM:-0} -ne 0 ] && echo "u${SMALLNUM}"))\033[0m"
 echo -e "LKM: \033[1;37m${LKM}\033[0m"
 echo
 echo -e "\033[1;37mSystem:\033[0m"
 echo -e "Vendor: \033[1;37m${VENDOR}\033[0m"
 echo -e "CPU: \033[1;37m${CPU}\033[0m"
 echo -e "Memory: \033[1;37m${RAMTOTAL}GB\033[0m"
+echo -e "Time OS | Bios: \033[1;37m$(TZ="${REGION}/${TIMEZONE}" && date "+%F %H:%M:%S") | $(hwclock | cut -d. -f1)\033[0m"
 echo
 
 if ! readConfigMap "addons" "${USER_CONFIG_FILE}" | grep -q nvmesystem; then

@@ -39,8 +39,6 @@ jobs:
           MODEL = ''
           PRODUCTVER = ''
           ADDONS = ''
-          MODULES = ''
-          MACSYS = ''
           KERNEL = ''
           FORMAT = ''
           try:
@@ -85,7 +83,8 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y jq gawk cpio gettext libelf-dev qemu-utils busybox dialog curl sed 
+          sudo apt install -y jq gawk cpio gettext libelf-dev qemu-utils busybox dialog curl sed
+          sudo pip install -r scripts/requirements.txt
           sudo snap install yq
 
       # Build incremental
@@ -117,10 +116,15 @@ jobs:
           echo "Set Custom Config"
           PRESET_CONFIG_FILE="/tmp/p1/user-config.yml"
           sudo touch "${PRESET_CONFIG_FILE}"
-          writeConfigKey "model" "${{ env.MODEL }}" "${PRESET_CONFIG_FILE}"
-          writeConfigKey "productver" "${{ env.PRODUCTVER }}" "${PRESET_CONFIG_FILE}"
-          writeConfigKey "arc" "{}" "${PRESET_CONFIG_FILE}"
-          writeConfigKey "automated" "true" "${PRESET_CONFIG_FILE}"
+          MODEL="${{ env.MODEL }}"
+          writeConfigKey "model" "${MODEL}" "${PRESET_CONFIG_FILE}"
+          PRODUCTVER="${{ env.PRODUCTVER }}"
+          PJ="$(python scripts/functions.py getpats4mv -m "${MODEL}" -v "${PRODUCTVER:0:3}")"
+          PAT_URL=$(echo "${PJ}" | jq -r ".\"${PRODUCTVER}\".url")
+          PAT_HASH=$(echo "${PJ}" | jq -r ".\"${PRODUCTVER}\".sum")
+          writeConfigKey "productver" "${PRODUCTVER:0:3}" "${PRESET_CONFIG_FILE}"
+          writeConfigKey "paturl" "${PAT_URL}" "${PRESET_CONFIG_FILE}"
+          writeConfigKey "pathash" "${PAT_HASH}" "${PRESET_CONFIG_FILE}"
           if [ "${{ env.MODEL }}" = "SA6400" ]; then
             writeConfigKey "kernel" "${{ env.KERNEL }}" "${PRESET_CONFIG_FILE}"
           fi
@@ -131,9 +135,16 @@ jobs:
               writeConfigKey "addons.\"${A}\"" "${VALUE}" "${PRESET_CONFIG_FILE}"
             done
           fi
+          writeConfigKey "automated" "true" "${PRESET_CONFIG_FILE}"
           echo "$(cat "${PRESET_CONFIG_FILE}")"
-          sudo echo "arc-${{ env.MODEL }}-${{ env.PRODUCTVER }}-${{ env.VERSION }}" >"/tmp/automated"
+          sudo echo "arc-${MODEL}-${PRODUCTVER:0:3}-${TAG}" >"/tmp/automated"
           sudo mv -f "/tmp/automated" "/tmp/p3/automated"
+          DSM_FILE="${PAT_HASH}.tar"
+          DSM_URL="https://raw.githubusercontent.com/AuxXxilium/arc-dsm/main/files/${MODEL/+/%2B}/${PRODUCTVER:0:3}/${PAT_HASH}.tar"
+          sudo curl -skL "${DSM_URL}" -o "/tmp/${DSM_FILE}"
+          [ -f "/tmp/${DSM_FILE}" ] && echo "dsm: download successful" || exit 1
+          sudo mkdir -p "/tmp/p3/users"
+          sudo mv -f "/tmp/${DSM_FILE}" "/tmp/p3/users/${DSM_FILE}"
           echo "Syncing files"
           sync
 
@@ -236,14 +247,6 @@ jobs:
             If this will not work, do not use customized Versions!
             ----
 
-      - name: Close Issues
-        if: success()
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: 'close-issue'
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-
       - name: Update Comment Fail
         if: failure()
         uses: actions-cool/issues-helper@v3
@@ -260,6 +263,14 @@ jobs:
             If this will not work, do not use customized Versions!
             ----
 
+      - name: Close Issues
+        if: success()
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'close-issue'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+  
   comment:
     if: github.event.label.name == 'bug'
     runs-on: ubuntu-latest

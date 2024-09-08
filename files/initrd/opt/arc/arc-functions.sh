@@ -37,7 +37,6 @@ function addonSelection() {
   # read platform and kernel version to check if addon exists
   MODEL="$(readConfigKey "model" "${USER_CONFIG_FILE}")"
   PRODUCTVER="$(readConfigKey "productver" "${USER_CONFIG_FILE}")"
-  NANOVER="$(readConfigKey "nanover" "${USER_CONFIG_FILE}")"
   PLATFORM="$(readConfigKey "platform" "${USER_CONFIG_FILE}")"
   ARCPATCH="$(readConfigKey "arc.patch" "${USER_CONFIG_FILE}")"
   # read addons from user config
@@ -51,8 +50,6 @@ function addonSelection() {
   while read -r ADDON DESC; do
     arrayExistItem "${ADDON}" "${!ADDONS[@]}" && ACT="on" || ACT="off"
     if [[ "${ADDON}" == "amepatch" || "${ADDON}" == "sspatch" || "${ADDON}" == "arcdns" ]] && [ "${ARCPATCH}" == "false" ]; then
-      continue
-    elif [[ "${ADDON}" == "codecpatch" || "${ADDON}" == "sspatch" ]] && [ "${NANOVER}" == "2" ]; then
       continue
     elif [ "${ADDON}" == "cpufreqscaling" ] && [ "${CPUFREQ}" == "false" ]; then
       continue
@@ -84,11 +81,7 @@ function modulesMenu() {
   PLATFORM="$(readConfigKey "platform" "${USER_CONFIG_FILE}")"
   KVER="$(readConfigKey "platforms.${PLATFORM}.productvers.\"${PRODUCTVER}\".kver" "${P_FILE}")"
   # Modify KVER for Epyc7002
-  if [ "${PLATFORM}" == "epyc7002" ]; then
-    KVERP="${PRODUCTVER}-${KVER}"
-  else
-    KVERP="${KVER}"
-  fi
+  [ "${PLATFORM}" == "epyc7002" ] && KVERP="${PRODUCTVER}-${KVER}" || KVERP="${KVER}"
   # menu loop
   while true; do
     dialog --backtitle "$(backtitle)" --cancel-label "Exit" --menu "Choose an Option" 0 0 0 \
@@ -857,18 +850,18 @@ function updateMenu() {
   ARCBRANCH="$(readConfigKey "arc.branch" "${USER_CONFIG_FILE}")"
   NEXT="1"
   while true; do
-    dialog --backtitle "$(backtitle)" --cancel-label "Exit" \
+    dialog --backtitle "$(backtitle)" --colors --cancel-label "Exit" \
       --menu "Choose an Option" 0 0 0 \
+      0 "Buildroot Branch: \Z1${ARCBRANCH}\Zn" \
       1 "Automated Update Mode" \
-      2 "Full-Upgrade Loader (reflash)" \
-      3 "Update Loader" \
-      4 "Update Addons" \
-      5 "Update Configs" \
-      6 "Update LKMs" \
-      7 "Update Modules" \
-      8 "Update Patches" \
-      9 "Update Custom Kernel" \
-      0 "Buildroot Branch: ${ARCBRANCH}" \
+      2 "Full-Upgrade Loader \Z1(reflash)\Zn" \
+      3 "\Z4Advanced:\Zn Update Loader" \
+      4 "\Z4Advanced:\Zn Update Addons" \
+      5 "\Z4Advanced:\Zn Update Configs" \
+      6 "\Z4Advanced:\Zn Update LKMs" \
+      7 "\Z4Advanced:\Zn Update Modules" \
+      8 "\Z4Advanced:\Zn Update Patches" \
+      9 "\Z4Advanced:\Zn Update Custom Kernel" \
       2>"${TMP_PATH}/resp"
     [ $? -ne 0 ] && break
     case "$(cat ${TMP_PATH}/resp)" in
@@ -887,7 +880,7 @@ function updateMenu() {
           1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
-        [ $? -ne 0 ] && continue
+        [ $? -ne 0 ] && break
         opts=$(cat ${TMP_PATH}/opts)
         if [ ${opts} -eq 1 ]; then
           TAG=""
@@ -914,7 +907,7 @@ function updateMenu() {
           1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
-        [ $? -ne 0 ] && continue
+        [ $? -ne 0 ] && break
         opts=$(cat ${TMP_PATH}/opts)
         if [ ${opts} -eq 1 ]; then
           TAG=""
@@ -953,7 +946,7 @@ function updateMenu() {
           1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
-        [ $? -ne 0 ] && continue
+        [ $? -ne 0 ] && break
         opts=$(cat ${TMP_PATH}/opts)
         if [ ${opts} -eq 1 ]; then
           TAG=""
@@ -979,6 +972,7 @@ function updateMenu() {
           1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
+        [ $? -ne 0 ] && break
         opts=$(cat ${TMP_PATH}/opts)
         if [ ${opts} -eq 1 ]; then
           TAG=""
@@ -1008,6 +1002,7 @@ function updateMenu() {
           1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
+        [ $? -ne 0 ] && break
         opts=$(cat ${TMP_PATH}/opts)
         if [ ${opts} -eq 1 ]; then
           TAG=""
@@ -1033,6 +1028,7 @@ function updateMenu() {
           1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
+        [ $? -ne 0 ] && break
         opts=$(cat ${TMP_PATH}/opts)
         if [ ${opts} -eq 1 ]; then
           TAG=""
@@ -1058,6 +1054,7 @@ function updateMenu() {
           1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
+        [ $? -ne 0 ] && break
         opts=$(cat ${TMP_PATH}/opts)
         if [ ${opts} -eq 1 ]; then
           TAG=""
@@ -1083,6 +1080,7 @@ function updateMenu() {
           1 "Latest ${NEWVER}" \
           2 "Select Version" \
         2>"${TMP_PATH}/opts"
+        [ $? -ne 0 ] && break
         opts=$(cat ${TMP_PATH}/opts)
         if [ ${opts} -eq 1 ]; then
           TAG=""
@@ -1106,6 +1104,7 @@ function updateMenu() {
           1 "Stable Buildroot" \
           2 "Next Buildroot (latest)" \
         2>"${TMP_PATH}/opts"
+        [ $? -ne 0 ] && break
         opts=$(cat ${TMP_PATH}/opts)
         if [ ${opts} -eq 1 ]; then
           writeConfigKey "arc.branch" "stable" "${USER_CONFIG_FILE}"
@@ -1220,7 +1219,7 @@ function sysinfo() {
   TEXT+="\n  CPU Scaling: \Zb${CPUFREQ}\Zn"
   TEXT+="\n  Secure Boot: \Zb${SECURE}\Zn"
   TEXT+="\n  Bootdisk: \Zb${LOADER_DISK}\Zn"
-  TEXT+="\n  Date/Time: \Zb$(date)\Zn"
+  TEXT+="\n  Time OS | Bios: \Zb$(TZ="${REGION}/${TIMEZONE}" && date "+%F %H:%M:%S") | $(hwclock | cut -d. -f1)\Zn"
   TEXT+="\n"
   TEXT+="\n\Z4> Network: ${ETHN} NIC\Zn\n"
   for ETH in ${ETHX}; do
@@ -1269,6 +1268,9 @@ function sysinfo() {
     TEXT+="\n  Kernelload: \Zb${KERNELLOAD}\Zn"
     TEXT+="\n  Directboot: \Zb${DIRECTBOOT}\Zn"
     TEXT+="\n  Addons selected: \Zb${ADDONSINFO}\Zn"
+  else
+    TEXT+="\n"
+    TEXT+="\n  Config not completed!\n"
   fi
   TEXT+="\n  Modules loaded: \Zb${MODULESINFO}\Zn"
   if [ "${CONFDONE}" == "true" ]; then
@@ -2196,7 +2198,7 @@ function rebootMenu() {
   echo -e "update \"Arc: Automated Update Mode\"" >>"${TMP_PATH}/opts"
   echo -e "init \"Arc: Restart Loader Init\"" >>"${TMP_PATH}/opts"
   echo -e "network \"Arc: Restart Network Service\"" >>"${TMP_PATH}/opts"
-  if [ "${BUILDONE}" == "true" ]; then
+  if [ "${BUILDDONE}" == "true" ]; then
     echo -e "recovery \"DSM: Recovery Mode\"" >>"${TMP_PATH}/opts"
     echo -e "junior \"DSM: Reinstall Mode\"" >>"${TMP_PATH}/opts"
   fi
